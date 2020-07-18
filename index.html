@@ -1,0 +1,318 @@
+
+<!doctype html>
+
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+  <meta name="theme-color" content="#4F7DC9">
+  <meta charset="UTF-8">
+  <title>GDG Lawrence Full Stack Community / Creating the GDG Community Page</title>
+  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Source+Code+Pro:400|Roboto:400,300,400italic,500,700|Roboto+Mono">
+  <link rel="stylesheet" href="//fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://storage.googleapis.com/codelab-elements/codelab-elements.css">
+  <style>
+    .success {
+      color: #1e8e3e;
+    }
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <google-codelab-analytics gaid="UA-49880327-14"></google-codelab-analytics>
+  <google-codelab codelab-gaid=""
+                  id="codelab5_communitypage"
+                  title="GDG Lawrence Full Stack Community / Creating the GDG Community Page"
+                  environment="web"
+                  feedback-link="">
+    
+      <google-codelab-step label="Overview" duration="2">
+        <p>This codelab provides the tutorial on how to create the GDG Community Page, where you and all other registered members can see each other logged in in real-time.</p>
+<h2 is-upgraded>What you will learn</h2>
+<ul>
+<li>How to create the GDG Community Page</li>
+<li>Create Reusable Angular Components</li>
+<li>Fetching Data from Firebase</li>
+<li>Real-Time Features of Firebase / Signed-In Status</li>
+</ul>
+<h2 is-upgraded>Prerequisites</h2>
+<ul>
+<li>Full Stack Development Environment Setup</li>
+<li>Familiar with Html, CSS, and Typescript</li>
+<li>Internet Connection</li>
+</ul>
+<p>At the end of this lab, you will have the GDG Community page that looks like the following:</p>
+<p class="image-container"><img alt="alt text" src="img/8408685c99643cf1.png"></p>
+<p>You&#39;ll be able to see all users who are registered members of the GDG Community app, and even the ones who are logged in in real time (denoted by the green check). The green check is not shown for logged out members.</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Creating the Service Hooks to Retrieve FirebaseData" duration="0">
+        <h2 is-upgraded>Fetching the GDG Community Registered Members</h2>
+<p>Open the <strong>user.service.ts</strong> and add a method called <em>getUsers()</em> to fetch all registered users under the Firebase collection with name <strong>community</strong>:</p>
+<pre><code>...
+getUsers() {
+    return this.firestore.collection(&#39;community&#39;).ref;
+}
+...
+</code></pre>
+<p>This returns a <strong>ref</strong> object from which you can subscribe and extract the data directly from Firebase.</p>
+<h2 is-upgraded>Update the Current User&#39;s Online Status</h2>
+<p>The following method <em>setUserOnlineStatys</em> is the way that we will be setting the current logged in user&#39;s status of <strong>isOnline</strong> to <strong>true</strong>. We target the Firebase document associated with the logged in user by its <strong>userId</strong> out of the <strong>community</strong> collection, then we call <strong>.set</strong>, passing the value to change in this document, and using the option of <strong>{ merge: true }</strong> since the <strong>.set</strong> method overrides the content of a document when performing an update; this way merges existing values and just changes the provided ones. Paste the code below into the <strong>UserService</strong> class:</p>
+<pre><code>...
+setUserOnlineStatus(userId: string, isUserOnline: boolean) {
+    return new Promise&lt;boolean&gt;((resolve, reject) =&gt; {
+      this.firestore.collection(&#39;community&#39;).doc(userId).set({
+        isOnline: isUserOnline
+      }, { merge: true }).then(() =&gt; {
+        resolve(true);
+      });
+    });
+  }
+...
+</code></pre>
+<p>Notice how we wrap it inside a <em>Promise</em> so we can handle the Firebase update asynchronously and resolve this Promise to be able to return to the user upon success.</p>
+<p>Once the service operations are in place, let&#39;s proceed with the page itself.</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Adding the GDG Community Page Component Logic" duration="0">
+        <p>Let&#39;s create the page for the GDG Community, starting by using the Angular CLI to generate the component elements for us. At the root of the project, execute the following command:</p>
+<pre><code>ng generate component gdg-community-page
+</code></pre>
+<p>As always, this generates the necessary files for this component. Let&#39;s start by adding the logic behind the component. Locate the <em>gdg-community-page.component.ts</em> and let&#39;s start adding some of the logic for it.</p>
+<p>Add the <em>encapsulation: ViewEncapsulation.None</em> to this component&#39;s <em>@Component</em> decorator:</p>
+<pre><code>...
+@Component({
+  selector: &#39;app-gdg-community-page&#39;,
+  templateUrl: &#39;./gdg-community-page.component.html&#39;,
+  styleUrls: [&#39;./gdg-community-page.component.less&#39;],
+  encapsulation: ViewEncapsulation.None
+})
+...
+</code></pre>
+<p>Let&#39;s create the property that will hold the list of all GDG Community Members, which will be a collection of <strong>MemberData</strong> objects:</p>
+<pre><code>...
+gdgCommunityMembers: MemberData[] = [];
+...
+</code></pre>
+<p>Inject in the constructure the <em>UserService</em> service so we can pull the list of users from Firebase. *<strong>UserService</strong> serves as a wrapper around access to our Firebase collections:</p>
+<pre><code>...
+constructor(private userService: UserService) { }
+...
+</code></pre>
+<p>In the <em>ngOnInit</em> of the <em>GdgCommunityPageComponent</em>, let&#39;s tap into the <em>UserService</em>&#39;s <em>getUsers()</em> method which returns a reference of the <strong>community</strong> Firebase collection, from which we can tap into the <strong>get()</strong> method and the <strong>onSnapshot</strong> method:</p>
+<pre><code>...
+ngOnInit(): void {
+    // fetching the list initially, use get
+    this.userService.getUsers().get().then((querySnapshot) =&gt; {
+      querySnapshot.forEach((doc) =&gt; {
+        this.gdgCommunityMembers.push(doc.data() as MemberData);
+      });
+    });
+
+    // listen for updates, use onSnapshot
+    this.userService.getUsers().onSnapshot((querySnapshot) =&gt; {
+      this.gdgCommunityMembers = [];
+      querySnapshot.forEach((doc) =&gt; {
+        this.gdgCommunityMembers.push(doc.data() as MemberData);
+      });
+    });
+  }
+...
+</code></pre>
+<p>The <strong>get()</strong> method fetches the data available in the collection. This returns a <em>Promise</em> which returns a <strong>querySnapshot</strong> of the collection data, from which we can loop through, get each document as a Firebase document, out of which you unwrap the data via the <strong>.data()</strong> method. Then inside the callback method, we loop through all the elements inside the <em>querySnapshop</em> which is nothing but a copy of what&#39;s currently in Firebase&#39;s <strong>community</strong> collection.</p>
+<p>The <strong>onSnapshot</strong> listens for updates on the collection at hand - in our case, the <strong>community</strong> collection. Any newly added elements, or any updates any of the documents inside of this collection, will trigger the <strong>onSnapshot</strong> hook method. Then, inside the callback, we just loop through all the values in tne <em>querySnapshot</em> which is nothing more than the updated version of the collection in question.</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Adding the HTML for the Community Page" duration="0">
+        <p>Locate the <em>gdg-community-page.component</em> and add the following HTML:</p>
+<pre><code>&lt;div class=&#34;gdg-community-page app-page&#34;&gt;
+    &lt;app-bar [title]=&#34;&#39;GDG Community&#39;&#34; [showProfile]=&#34;true&#34;&gt;&lt;/app-bar&gt;
+    &lt;section class=&#34;gdg-community-list&#34;&gt;
+        &lt;ng-container *ngFor=&#34;let member of gdgCommunityMembers&#34;&gt;
+            &lt;!-- here we need to iterate over the list of members and display their info --&gt;
+        &lt;/ng-container&gt;
+    &lt;/section&gt;
+&lt;/div&gt;
+</code></pre>
+<p>This is a simple structure in which we have a container called <strong>gdg-community-list</strong> in which we are looping through the list of members in the <em>gdgCommunityMembers</em> collection. We now need to consume each member in the iteration and display their info somehow.</p>
+<h2 is-upgraded>Reusable Angular Components to the Rescue!</h2>
+<p>If you notice here also, we are using the commonly used <strong>app-bar</strong> reusable component, which shows the title and profile icon via the inputs provided called <strong>title</strong> and <strong>showProfile</strong> respectively.</p>
+<p>Now, how do we display the member information? We can do it here in line, but why not create a more encapsulated component that comprises all information related to a member, their logged in status, etc.?</p>
+<p>Let&#39;s proceed by creating a new reusable Angular component.</p>
+<h2 is-upgraded>Creating the Community Member Row Component</h2>
+<p>Components are cheap, that&#39;s why we like to break up our application into discrete, reusable, encapsulated components rather than doing inline markup.</p>
+<p>Go to the <strong>app/components</strong> folder in the Visual Studio command line, and type up the following command to create a component called <strong>community-member-row</strong>:</p>
+<pre><code>ng generate component community-member-row
+</code></pre>
+<p>As always, this generates the necessary files (HTML, TS, LESS). Locate its <em>community-member-row.component.ts</em> in order to add the required logic. Start by adding the <em>encapsulation: ViewEncapsulation.None</em> to let the CSS styles cascade into this component if needed.</p>
+<pre><code>@Component({
+  selector: &#39;app-community-member-row&#39;,
+  templateUrl: &#39;./community-member-row.component.html&#39;,
+  styleUrls: [&#39;./community-member-row.component.less&#39;],
+  encapsulation: ViewEncapsulation.None
+})
+export class CommunityMemberRowComponent implements OnInit {
+</code></pre>
+<p>The only thing we will add here is an <em>@Input()</em> parameter that we&#39;ll call <strong>member</strong>, of type <em>MemberData</em>. This will serve as the entry point through which we will inject the member data into this component. Add this inside of the *<strong>CommunityMemberRowComponent</strong> on top of the constructor:</p>
+<pre><code>@Input() member: MemberData;
+</code></pre>
+<p>We&#39;re good as far as logic. Now let&#39;s navigate to the <em>community-member-row.component.html</em> and paste the following markup:</p>
+<pre><code>&lt;div class=&#34;gdg-member-row&#34;&gt;
+    &lt;div class=&#34;member-img&#34;&gt;
+        &lt;img src=&#34;&#123;&#123; member.photoURL }}&#34; /&gt;
+    &lt;/div&gt;
+    &lt;div class=&#34;member-info&#34;&gt;
+        &lt;div class=&#34;member-name&#34;&gt;&#123;&#123; member.name }}&lt;/div&gt;
+        &lt;div class=&#34;member-level&#34;&gt;&#123;&#123; member.skills | titlecase }}&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&#34;member-online&#34; *ngIf=&#34;member.isOnline&#34;&gt;
+        &lt;div class=&#34;member-online-check&#34;&gt;
+            &lt;span class=&#34;member-online-icon material-icons&#34;&gt;check_circle&lt;/span&gt;
+        &lt;/div&gt;
+    &lt;/div&gt;
+&lt;/div&gt;
+</code></pre>
+<p>As you can see, the parent container <em>gdg-member-row</em> just wraps three top-level components: <em>member-img</em>, <em>member-info</em> and <em>member-online</em> which represent the entities we want to display. <em>member-image</em> displays the image of the user through the <strong>photoURL</strong> property in an <strong>img</strong> tag; the <em>member-info</em>  displays the <strong>name</strong> and <strong>skills</strong>, and it displays the <strong>skills</strong> using an Angular Pipe - utilities that act upon data and alter it before being rendered; in this case, it displays the skills using <strong>titlecase</strong> (capitalizes the first letter in the word). More on pipes <a href="https://angular.io/guide/pipes" target="_blank">here</a>.</p>
+<p>The <strong>member-online</strong> shows a green checkmark only if the <em>member.isOnline</em> property is provided, which conditionaly renders this segment (hence the <strong>ngIf</strong>). We are also making use of the Google Material Icons to display a checkmark icon:</p>
+<pre><code>...
+&lt;span class=&#34;member-online-icon material-icons&#34;&gt;check_circle&lt;/span&gt;
+...
+</code></pre>
+<p>Now, find the <em>community-member-row.component.less</em> and paste the CSS below:</p>
+<pre><code>@import &#39;./../../../assets/styles/colors.less&#39;;
+
+.gdg-member-row {
+    display: flex;
+    align-items: center;
+    padding: 20px;
+
+    .member-img {
+        width: 50px;
+    
+        img {
+            max-width: 100%;
+            border-radius: 50%;
+        }
+    }
+
+    .member-info {
+        margin-left: 20px;
+        flex: 1;
+
+        .member-level {
+            font-size: 0.8em;
+            color: @color_focus_bckg;
+        }
+    }
+
+    .member-online-check {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+
+        .member-online-icon {
+            color: @color_profile;
+            font-size: 2em;
+        }
+    }
+}
+</code></pre>
+<p>Notice the <em>member-info</em> how it also adopts the flexbox model strategy and uses <strong>flex: 1</strong> to occupy the vast majority of the space, pushing its siblings to the sides, while also applying a <em>margin-left</em> of 20 pixels.</p>
+<p>This component is created - now, let&#39;s use it!</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Using the Community Member Row Component" duration="0">
+        <p>Let&#39;s go back to the <em>gdg-community-page.component.html</em> and add the missing piece. Replace the placeholder content inside the <strong>ng-container *ngFor</strong> by adding the newly created <strong>community-member-row</strong> component. The <strong>ng-container</strong> should look like this now:</p>
+<pre><code>...
+&lt;ng-container *ngFor=&#34;let member of gdgCommunityMembers&#34;&gt;
+    &lt;app-community-member-row [member]=&#34;member&#34;&gt;&lt;/app-community-member-row&gt;
+&lt;/ng-container&gt;
+...
+</code></pre>
+<p>Notice how we are injecting each of the iterating member elements into the <strong>app-community-member-row</strong> component via its provided input <strong>[member]</strong>. This way you are hiding the implementation details of the community member row, making it more encapsulated.</p>
+<p>Now, add the CSS for the <strong>gdg-community-page.component.less</strong>:</p>
+<pre><code>@import &#39;./../../assets/styles/colors.less&#39;;
+
+.gdg-community-page {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+
+    .app-bar {
+        padding: 16px !important;
+        background: @color_profile;
+        display: flex;
+        justify-content: space-between;
+
+        span {
+            color: #FFF !important;
+        }
+    }
+}
+
+.gdg-community-list {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+}
+</code></pre>
+<p>One thing to notice here. The regular <strong>app-bar</strong> component looks like this:</p>
+<p class="image-container"><img alt="alt text" src="img/475848de29bcff57.png"></p>
+<p>And now notice how different it looks in this page - and it has exactly <em>the same</em> functionality!</p>
+<p class="image-container"><img alt="alt text" src="img/c9ca294f4aa72798.png"></p>
+<p>This is the power of CSS and its cascading nature. Notice in the styles above, we are clearly stating that only if the app-bar is displayed within the gdg-community-page, it adopts the green background from the @color_profile, change the icon span tags to <strong>white (#FFF)</strong>, and reduces the padding a bit. We are in this case <strong>overriding</strong> the original CSS styles from the app-bar and only applying it in the case where it appears inside the gdg-community-page.</p>
+<pre><code>.gdg-community-page {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+
+    .app-bar {
+        padding: 16px !important;
+        background: @color_profile;
+        display: flex;
+        justify-content: space-between;
+
+        span {
+            color: #FFF !important;
+        }
+    }
+}
+</code></pre>
+<p>This page should be all set! Take the whole workflow for a spin, starting from clearing the <strong>localstorage</strong> value of the <strong>userId</strong> so it thinks you haven&#39;t registered yet:</p>
+<ul>
+<li>Start from the root (<em>http://localhost:4200</em>)</li>
+<li>Log in using your Gmail account</li>
+<li>Fill out the form</li>
+<li>Once confirmed, go to your profile page</li>
+<li>From the profile page, then Join the GDG Community</li>
+</ul>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Conclusion" duration="0">
+        <p>Congratulations, if you made it this far, you&#39;ve completed a full-fledged, full-stack application using Angular as the front-end, and Firebase as the backend, and implemented the latest patterns and practices when developing single-page apps in the process.</p>
+<p>We the GDG Lawrence Team hope you&#39;ve enjoyed this journey with us!</p>
+
+
+      </google-codelab-step>
+    
+  </google-codelab>
+
+  <script src="https://storage.googleapis.com/codelab-elements/native-shim.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/custom-elements.min.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/prettify.js"></script>
+  <script src="https://storage.googleapis.com/codelab-elements/codelab-elements.js"></script>
+  <script src="//support.google.com/inapp/api.js"></script>
+
+</body>
+</html>
